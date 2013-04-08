@@ -362,7 +362,7 @@ class MainWindow(QtGui.QMainWindow):
             return
 
         # Plot the data.
-        pick.data.sort()
+        pick.data.sort(reverse=True)
         self.current_state["pick"] = pick
         self.ui.waveform_figure.clear()
         self.ui.waveform_figure.subplots_adjust(left=0.1)
