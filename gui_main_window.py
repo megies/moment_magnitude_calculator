@@ -22,6 +22,7 @@ import matplotlib.widgets
 import mtspec
 import numpy as np
 from obspy.core.event import Comment, Magnitude, Catalog
+from obspy.signal import pazToFreqResp
 from obspy.seishub import Client
 import os
 
@@ -221,9 +222,21 @@ class MainWindow(QtGui.QMainWindow):
 
         self.current_state["channel"] = trace.id
 
+        # calculate velocity response of instrument
+        zeros = copy.deepcopy(trace.stats.paz['zeros'])
+        zeros.remove(0j)
+        resp, resp_freq = pazToFreqResp(trace.stats.paz['poles'], zeros,
+            trace.stats.paz['gain'], trace.stats.delta, 16384, freq=True)
+
         self.ui.spectrum_figure.clear()
         self.ui.spectrum_figure.subplots_adjust(left=0.1, bottom=0.1)
-        ax = self.ui.spectrum_figure.add_subplot(111)
+        # second axes to plot instrument response
+        # make the second axes first so that mouse clicks get recognized in
+        # first axes. this could be controlled by zorder in principle but i
+        # could not get it right.
+        ax2 = self.ui.spectrum_figure.add_subplot(111)
+        ax = ax2.twinx()
+        # spectrum plotting
         ax.loglog(freq, spec, color="black")
         ax.frequencies = freq
         ax.spectrum = spec
@@ -241,6 +254,14 @@ class MainWindow(QtGui.QMainWindow):
         ax.pick_values = {}
         ax.set_ylim(spec.min() / 10.0, spec.max() * 100.0)
         ax.set_xlim(1.0, 100)
+        # plot amplitude response of instrument
+        ax2.loglog(resp_freq, np.abs(resp) ** 2, color="b")
+        # make sure we have the same scale on both y-axes
+        log_range = float(np.diff(np.log10(ax.get_ylim())))
+        y_min, y_max = ax2.get_ylim()
+        y_min = np.power(10, np.log10(y_max) - log_range)
+        ax2.set_ylim(bottom=y_min)
+        ax2.set_ylabel('Amplitude-squared Velocity Response of Instrument', color="b")
         self.ui.spectrum_figure.canvas.draw()
 
         # Now guess guess some values, and fit the curve. Setting it to 10 is
@@ -291,7 +312,7 @@ class MainWindow(QtGui.QMainWindow):
         """
         Plots the spectrum.
         """
-        ax = self.ui.spectrum_figure.axes[0]
+        ax = self.ui.spectrum_figure.axes[1]
         if hasattr(ax, "theoretical_spectrum"):
             ax.theoretical_spectrum.pop(0).remove()
             del ax.theoretical_spectrum
@@ -336,7 +357,7 @@ class MainWindow(QtGui.QMainWindow):
         Use the current spectrum parameters to get a better fit using a
         Levenberg-Marquardt algorithm.
         """
-        ax = self.ui.spectrum_figure.axes[0]
+        ax = self.ui.spectrum_figure.axes[1]
         self.current_state["omega_0"], \
             self.current_state["corner_frequency"], \
             self.current_state["omega_0_var"], \
