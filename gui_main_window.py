@@ -34,6 +34,9 @@ from utils import center_Qt_window, calculate_source_spectrum, fit_spectrum, \
     moment_to_moment_magnitude, source_radius_from_corner_frequency, \
     calculate_stress_drop
 
+# seconds to buffer waveform for processing
+PROCESSING_BUFFER = 120.0
+
 
 class MainWindow(QtGui.QMainWindow):
     """
@@ -418,9 +421,11 @@ class MainWindow(QtGui.QMainWindow):
                     location=pick.waveform_id.location_code,
                     channel=pick.waveform_id.channel_code[:-1] + "*",
                     starttime=pick.time - \
-                        float(self.ui.buffer_seconds.value()),
+                        float(self.ui.buffer_seconds.value()) -
+                        PROCESSING_BUFFER,
                     endtime=pick.time + \
-                        float(self.ui.buffer_seconds.value()),
+                        float(self.ui.buffer_seconds.value()) +
+                        PROCESSING_BUFFER,
                     getPAZ=True, getCoordinates=True, apply_filter=True)
             except Exception, e:
                 error_type_str = e.__class__.__name__
@@ -435,6 +440,8 @@ class MainWindow(QtGui.QMainWindow):
             st.merge(-1)
             st.detrend()
             st.simulate(paz_remove="self", water_level=10.0)
+            st.trim(pick.time - float(self.ui.buffer_seconds.value()),
+                    pick.time + float(self.ui.buffer_seconds.value()))
             pick.data = st
         # Finish the progress dialog.
         progress_dialog.setValue(len(event.picks))
